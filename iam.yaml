@@ -1,0 +1,51 @@
+# 1. Create the IAM User for Vision AI
+resource "aws_iam_user" "vision_ai_user" {
+  name = "svc-tricentis-vision-ai"
+  path = "/service-accounts/"
+}
+
+# 2. Create the Access Key (This generates the credentials)
+resource "aws_iam_access_key" "vision_ai_key" {
+  user = aws_iam_user.vision_ai_user.name
+}
+
+# 3. Define the Policy (Minimal Privilege for Textract)
+# MODIFICATION: Added 'tenant_' prefix to the policy name
+resource "aws_iam_policy" "textract_policy" {
+  name        = "tenant_TricentisVisionAITextractPolicy"
+  description = "Allows Vision AI to call Textract in GovCloud"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "textract:AnalyzeDocument",
+          "textract:DetectDocumentText",
+          "textract:GetDocumentAnalysis",
+          "textract:GetDocumentText",
+          "textract:StartDocumentAnalysis",
+          "textract:StartDocumentTextDetection"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# 4. Attach Policy to User
+resource "aws_iam_user_policy_attachment" "attach_textract" {
+  user       = aws_iam_user.vision_ai_user.name
+  policy_arn = aws_iam_policy.textract_policy.arn
+}
+
+# 5. Output the Keys (IMPORTANT: These will be sensitive)
+output "OCR__AmazonTextractEndpoints__0__AccessKey" {
+  value = aws_iam_access_key.vision_ai_key.id
+}
+
+output "OCR__AmazonTextractEndpoints__0__SecretKey" {
+  value     = aws_iam_access_key.vision_ai_key.secret
+  sensitive = true
+}
