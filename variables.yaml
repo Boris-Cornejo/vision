@@ -1,0 +1,42 @@
+variable "aws_region" {
+  type        = string
+  description = "AWS region (used by provider; Vision AI Region is set in the k8s deployment env var)."
+}
+
+variable "iam_user_name" {
+  type        = string
+  description = "Dedicated IAM user for Vision AI Textract integration."
+  default     = "visionai-textract-user"
+}
+
+variable "iam_policy_name" {
+  type        = string
+  description = "Inline IAM policy name (MUST be prefixed with tenant_ per your requirement)."
+  default     = "tenant_visionai_textract_policy"
+}
+
+variable "secretsmanager_secret_name" {
+  type        = string
+  description = "Secrets Manager secret name used as objectName in the SecretProviderClass."
+  default     = "visionai-textract-secretkey"
+}
+
+# Optional: only if you encrypt the secret with a customer-managed KMS key
+variable "secrets_kms_key_arn" {
+  type        = string
+  description = "KMS key ARN for the secret (leave empty to use AWS-managed key)."
+  default     = ""
+}
+
+variable "textract_actions" {
+  type        = list(string)
+  description = "Textract actions allowed for the dedicated IAM user."
+  default = [
+    "textract:AnalyzeDocument",
+    "textract:DetectDocumentText",
+    "textract:StartDocumentAnalysis",
+    "textract:GetDocumentAnalysis",
+    "textract:StartDocumentTextDetection",
+    "textract:GetDocumentTextDetection"
+  ]
+}
