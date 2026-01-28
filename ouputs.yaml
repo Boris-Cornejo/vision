@@ -1,0 +1,25 @@
+output "iam_user_name" {
+  value = aws_iam_user.visionai_textract.name
+}
+
+output "iam_policy_name" {
+  value = aws_iam_user_policy.visionai_textract_inline.name
+}
+
+# This is what you set in your k8s manifest as:
+# OCR__AmazonTextractEndpoints__0__AccessKey
+output "textract_access_key_id" {
+  value     = aws_iam_access_key.visionai_textract_key.id
+  sensitive = true
+}
+
+# This is what your SecretProviderClass objectName should point to.
+# It will be mounted and aliased to:
+# OCR__AmazonTextractEndpoints__0__SecretKey
+output "textract_secret_name" {
+  value = aws_secretsmanager_secret.visionai_textract_secret.name
+}
+
+output "textract_secret_arn" {
+  value = aws_secretsmanager_secret.visionai_textract_secret.arn
+}
