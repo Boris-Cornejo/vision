@@ -1,0 +1,167 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus
+  namespace: visionai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nexus
+  template:
+    metadata:
+      labels:
+        app: nexus
+    spec:
+      serviceAccountName: visionai
+      restartPolicy: Always
+      securityContext:
+        runAsUser: 1654
+        runAsGroup: 1654
+        fsGroup: 1654
+        runAsNonRoot: true
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: accelerator
+                    operator: In
+                    values:
+                      - nvidia
+      tolerations:
+        - effect: NoSchedule
+          key: nvidia.com/gpu
+          operator: Exists
+      topologySpreadConstraints:
+        - labelSelector:
+            matchLabels:
+              app: nexus
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+      containers:
+        - name: nexus
+          image: vision-ai/onprem:stage
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 5098
+              name: api
+            - containerPort: 5008
+              name: health
+          resources:
+            requests:
+              cpu: "4000m"
+              memory: "16Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "6000m"
+              memory: "32Gi"
+              nvidia.com/gpu: "1"
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: SecretStorePath
+              value: /mnt/secrets-store
+
+            - name: Authentication__TUAEndpoint
+              value: "https://<tua-endpoint-url>"
+
+            - name: Identity__TenantID
+              value: "<external-id-or-uuid>"
+            - name: Identity__TenantExternalID
+              value: "<tenant-external-id>"
+            - name: Identity__TenantName
+              value: "<tenant-name>"
+
+            - name: Storage__FileStorageRootDirectory
+              value: /mnt/data
+
+            - name: SignalRCors__AllowedOrigins__0
+              value: "https://<visionai-hostname>"
+
+            - name: Kestrel__Endpoints__Https__Url
+              value: "https://+:5098"
+            - name: Kestrel__Endpoints__Https__SslProtocols__0
+              value: "Tls12"
+            - name: Kestrel__Endpoints__Https__Certificate__Path
+              value: "/mnt/certs/cert.pfx"
+
+            - name: OCR__AmazonTextractEndpoints__0__Region
+              value: "us-east-1"
+            - name: OCR__DefaultOcrVersion
+              value: "v5"
+
+            - name: ControlDetection__V4Desktop__Device
+              value: "0"
+            - name: ControlDetection__V5Desktop__Device
+              value: "0"
+
+            # Optional but commonly useful with AWS SDK default chain
+            - name: AWS_REGION
+              value: "us-east-1"
+
+          livenessProbe:
+            httpGet:
+              path: /health/liveness
+              port: 5008
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 60
+            successThreshold: 1
+            timeoutSeconds: 55
+            failureThreshold: 5
+
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: 5008
+              scheme: HTTP
+            initialDelaySeconds: 1
+            periodSeconds: 60
+            successThreshold: 1
+            timeoutSeconds: 55
+            failureThreshold: 5
+
+          startupProbe:
+            httpGet:
+              path: /health/readiness
+              port: 5008
+              scheme: HTTP
+            periodSeconds: 60
+            successThreshold: 1
+            timeoutSeconds: 60
+            failureThreshold: 5
+
+          volumeMounts:
+            - name: secrets-store-inline
+              mountPath: /mnt/secrets-store
+              readOnly: true
+            - name: tls
+              mountPath: /mnt/certs/cert.pfx
+              subPath: cert.pfx
+              readOnly: true
+            - name: tls
+              mountPath: /etc/ssl/certs/tosca_server.pem
+              subPath: tosca_server.pem
+              readOnly: true
+            - name: storage
+              mountPath: /mnt/data
+
+      volumes:
+        - name: secrets-store-inline
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: visionai-secret-provider-class
+        - name: tls
+          secret:
+            secretName: certificate-secret
+        - name: storage
+          persistentVolumeClaim:
+            claimName: storage-pv-claim
